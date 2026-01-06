@@ -1,0 +1,152 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      Role     @default(STAFF)
+  department String? // Department field for staff organization
+  avatar    String?
+  avatarKey String?  // For private avatar access
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Staff relationships
+  tasksAssigned Task[]     @relation("StaffTasks")
+  feedbackReceived Feedback[] @relation("StaffFeedback")
+  weeklySummaries WeeklySummary[]
+
+  // Manager relationships
+  feedbackGiven Feedback[] @relation("ManagerFeedback")
+  tasksAssigned2 Task[]    @relation("AssignedTasks")
+  telegramChatId  String?   @unique // Store the user's Telegram Chat ID here
+  @@map("users")
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  title       String
+  description String
+  progress    Int        @default(0)
+  status      TaskStatus @default(IN_PROGRESS)
+  priority    TaskPriority @default(NORMAL)
+  notes       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  dueDate     DateTime?
+  
+  // Task continuation tracking
+  continuedFromTaskId String?  @unique // ID of the original task this was continued from
+  continuedFromTask   Task?    @relation("TaskContinuation", fields: [continuedFromTaskId], references: [id], onDelete: SetNull)
+  continuedToTask     Task?    @relation("TaskContinuation")
+
+  // Relationships
+  staffId     String
+  staff       User     @relation("StaffTasks", fields: [staffId], references: [id], onDelete: Cascade)
+  assignedById String?
+  assignedBy   User?    @relation("AssignedTasks", fields: [assignedById], references: [id], onDelete: SetNull)
+  media       TaskMedia[]
+  feedback    Feedback[]
+
+  @@map("tasks")
+}
+
+model TaskMedia {
+  id        String   @id @default(cuid())
+  url       String
+  filename  String
+  type      String
+  caption   String?
+  key       String?  // For private file access
+  createdAt DateTime @default(now())
+
+  // Relationships
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("task_media")
+}
+
+model Feedback {
+  id           String       @id @default(cuid())
+  content      String
+  type         FeedbackType @default(DAILY)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  // Relationships
+  staffId      String
+  staff        User         @relation("StaffFeedback", fields: [staffId], references: [id], onDelete: Cascade)
+  managerId    String
+  manager      User         @relation("ManagerFeedback", fields: [managerId], references: [id], onDelete: Cascade)
+  taskId       String?
+  task         Task?        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  weeklySummaryId String?
+  weeklySummary WeeklySummary? @relation(fields: [weeklySummaryId], references: [id], onDelete: Cascade)
+  media        FeedbackMedia[]
+
+  @@map("feedback")
+}
+
+model FeedbackMedia {
+  id        String   @id @default(cuid())
+  url       String
+  filename  String
+  type      String
+  caption   String?
+  key       String?  // For private file access
+  createdAt DateTime @default(now())
+
+  // Relationships
+  feedbackId String
+  feedback   Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+
+  @@map("feedback_media")
+}
+
+model WeeklySummary {
+  id         String   @id @default(cuid())
+  summary    String
+  startDate  DateTime
+  endDate    DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relationships
+  staffId    String
+  staff      User     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  feedback   Feedback[]
+
+  @@map("weekly_summaries")
+}
+enum Role {
+  STAFF
+  MANAGER
+  ADMIN
+  BK
+}
+
+enum TaskStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum FeedbackType {
+  DAILY
+  WEEKLY
+}
